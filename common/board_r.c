@@ -66,6 +66,12 @@
 #include <asm-generic/gpio.h>
 #include <relocate.h>
 
+
+/* O1S_DBG bring-up hook */
+void o1s_dbg_tick(int failed);
+#undef INITCALL
+#define INITCALL(_call) do { o1s_log_str("[r] " #_call "\n"); int __r = _call(); o1s_dbg_tick(__r); if (__r) { printf("%s(): initcall %s() failed\n", __func__, #_call); hang(); } } while (0)
+
 DECLARE_GLOBAL_DATA_PTR;
 
 ulong monitor_flash_len;

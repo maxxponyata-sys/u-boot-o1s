@@ -12,8 +12,10 @@
 
 _Static_assert(EVT_COUNT < 256, "Can only support 256 event types with 8 bits");
 
+void o1s_log_str(const char *str);
 #define INITCALL(_call) \
 	do { \
+		o1s_log_str("[i] " #_call "\n"); \
 		if (_call()) { \
 			printf("%s(): initcall %s() failed\n", __func__, \
 			       #_call); \

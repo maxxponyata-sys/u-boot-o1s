@@ -1,0 +1,11 @@
+#include <configs/exynos-mobile_defconfig>
+
+# Samsung Galaxy S21 (o1s, SM-G991B), Exynos 2100
+CONFIG_DEFAULT_DEVICE_TREE="exynos/exynos2100-o1s"
+CONFIG_OF_LIST="exynos/exynos2100-o1s"
+CONFIG_ENV_SOURCE_FILE="exynos2100-o1s"
+# S-Boot hands over 16 memory nodes
+CONFIG_NR_DRAM_BANKS=16
+CONFIG_PINCTRL_EXYNOS2100=y
+# No UART is wired up in the o1s device tree
+# CONFIG_REQUIRE_SERIAL_CONSOLE is not set

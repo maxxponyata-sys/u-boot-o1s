@@ -112,6 +112,9 @@ static char *bootmenu_choice_entry(void *data)
 			menu->last_active = menu->active;
 			if (menu->active < menu->count - 1)
 				++menu->active;
+			else if (IS_ENABLED(CONFIG_BUTTON_REMAP_PHONE_KEYS))
+				/* phones without a usable "up" key: wrap around */
+				menu->active = 0;
 			/* no menu key selected, regenerate menu */
 			return NULL;
 		case BKEY_SHORTCUT:

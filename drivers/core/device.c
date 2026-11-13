@@ -35,6 +35,7 @@
 #include <power-domain.h>
 #include <linux/printk.h>
 
+void o1s_log_str(const char *str);
 DECLARE_GLOBAL_DATA_PTR;
 
 static int device_bind_common(struct udevice *parent, const struct driver *drv,
@@ -492,6 +493,10 @@ int device_probe(struct udevice *dev)
 
 	if (dev_get_flags(dev) & DM_FLAG_ACTIVATED)
 		return 0;
+
+	o1s_log_str("[p] ");
+	o1s_log_str(dev->name);
+	o1s_log_str("\n");
 
 	ret = device_notify(dev, EVT_DM_PRE_PROBE);
 	if (ret)

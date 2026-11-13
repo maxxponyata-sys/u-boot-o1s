@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/*
+ * Samsung Galaxy S21 5G (o1s / SM-G991B) device tree source
+ *
+ * Stage-1 bring-up: CPUs, timer, GIC, bootloader framebuffer, volume keys.
+ */
+
+/dts-v1/;
+#include "exynos2100.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "Samsung Galaxy S21 5G (SM-G991B)";
+	compatible = "samsung,o1s", "samsung,exynos2100";
+	chassis-type = "handset";
+
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		bootargs = "console=tty0 loglevel=7 clk_ignore_unused pd_ignore_unused";
+
+		framebuffer: framebuffer {
+			compatible = "simple-framebuffer";
+			memory-region = <&cont_splash_mem>;
+			width = <1080>;
+			height = <2400>;
+			stride = <(1080 * 4)>;
+			format = "a8r8g8b8";
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-0 = <&key_voldown &key_volup>;
+		pinctrl-names = "default";
+
+		voldown-key {
+			label = "Volume Down";
+			gpios = <&gpa0 4 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEDOWN>;
+			debounce-interval = <15>;
+		};
+
+		volup-key {
+			label = "Volume Up";
+			gpios = <&gpa0 3 GPIO_ACTIVE_LOW>;
+			/*
+			 * The power key sits on the S2MPS23 PMIC (no U-Boot
+			 * driver yet): use Volume Up as "select" for now.
+			 */
+			linux,code = <KEY_POWER>;
+			debounce-interval = <15>;
+		};
+	};
+
+	/*
+	 * Fallback only: U-Boot replaces this with the memory layout handed
+	 * over by Samsung's bootloader. The low 2 GiB bank is certain; the
+	 * high bank is deliberately conservative (4 GiB of the 6 GiB there).
+	 */
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x80000000>,
+		      <0x8 0x80000000 0x1 0x00000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		/* Regions owned by firmware / secure world (vendor DT) */
+		kaslr@80001000 {
+			reg = <0x0 0x80001000 0x0 0x1000>;
+			no-map;
+		};
+
+		sec_debug_next: sec-debug-next@91200000 {
+			reg = <0x0 0x91200000 0x0 0x1000000>;
+			no-map;
+		};
+
+		ramoops@8f000000 {
+			compatible = "ramoops";
+			reg = <0x0 0x8f000000 0x0 0x40000>;
+			record-size = <0x20000>;
+			pmsg-size = <0x20000>;
+		};
+
+		ect_binary: ect-binary@90000000 {
+			reg = <0x0 0x90000000 0x0 0x3a000>;
+			no-map;
+		};
+
+		secure_camera: secure-camera@96000000 {
+			reg = <0x0 0x96000000 0x0 0x38b0000>;
+			no-map;
+		};
+
+		el3mon: el3mon@bff80000 {
+			reg = <0x0 0xbff80000 0x0 0x80000>;
+			no-map;
+		};
+
+		s2mpu_table: s2mpu-table@c1800000 {
+			reg = <0x0 0xc1800000 0x0 0x800000>;
+			no-map;
+		};
+
+		seclog: seclog@c3000000 {
+			reg = <0x0 0xc3000000 0x0 0x80000>;
+			no-map;
+		};
+
+		debug_snapshot: debug-snapshot@f0000000 {
+			reg = <0x0 0xf0000000 0x0 0x3550000>;
+			no-map;
+		};
+
+		log_teegris: log-teegris@f4b00000 {
+			reg = <0x0 0xf4b00000 0x0 0x10000>;
+			no-map;
+		};
+
+		/*
+		 * Bootloader framebuffer. The address is NOT in the vendor
+		 * sources (the bootloader injects it at runtime); 0xfa000000
+		 * comes from a third-party S21+ port and must be confirmed
+		 * on the device - see README.
+		 */
+		cont_splash_mem: framebuffer@fa000000 {
+			reg = <0x0 0xfa000000 0x0 (1080 * 2400 * 4)>;
+			no-map;
+		};
+
+		log_bcm_llc_ppc: log@ff000000 {
+			reg = <0x0 0xff000000 0x0 0xd00000>;
+			no-map;
+		};
+
+		/* Modem shared memory */
+		cp_rmem: cp-rmem@880000000 {
+			reg = <0x8 0x80000000 0x0 0xd800000>;
+			no-map;
+		};
+
+		cp_rmem1: cp-rmem@890000000 {
+			reg = <0x8 0x90000000 0x0 0xa000000>;
+			no-map;
+		};
+	};
+};
+
+&pinctrl_cmgpeint {
+	key_voldown: key-voldown-pins {
+		samsung,pins = "gpa0-4";
+		samsung,pin-function = <0xf>;
+		samsung,pin-pud = <0>;
+		samsung,pin-drv = <3>;
+	};
+
+	key_volup: key-volup-pins {
+		samsung,pins = "gpa0-3";
+		samsung,pin-function = <0xf>;
+		samsung,pin-pud = <0>;
+		samsung,pin-drv = <3>;
+	};
+};

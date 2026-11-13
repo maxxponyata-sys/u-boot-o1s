@@ -25,6 +25,10 @@
 #include <asm/global_data.h>
 #include <linux/delay.h>
 
+
+/* O1S_DBG */
+void o1s_log_putc(char c);
+void o1s_log_str(const char *str);
 DECLARE_GLOBAL_DATA_PTR;
 
 #define CSI "\x1b["
@@ -194,9 +198,12 @@ static int console_setfile(int file, struct stdio_dev * dev)
 #ifndef CONFIG_XPL_BUILD
 		/*
 		 * Update monitor functions
-		 * (to use the console stuff by other applications)
+		 * (to use the console stuff by other applications).
+		 * The jump table only exists after jumptable_init(); a stdio
+		 * device registered earlier (e.g. button-kbd probed from
+		 * stdio_add_devices()) must not dereference a NULL gd->jt.
 		 */
-		switch (file) {
+		switch (gd->jt ? file : -1) {
 		case stdin:
 			gd->jt->getc = getchar;
 			gd->jt->tstc = tstc;
@@ -719,6 +726,7 @@ static inline void print_pre_console_buffer(int flushpoint) {}
 
 void putc(const char c)
 {
+	o1s_log_putc(c);
 	if (!gd)
 		return;
 
@@ -760,6 +768,7 @@ void putc(const char c)
 
 void puts(const char *s)
 {
+	o1s_log_str(s);
 	if (!gd)
 		return;
 

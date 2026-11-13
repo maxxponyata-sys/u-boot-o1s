@@ -102,6 +102,16 @@ pie_skip_reloc:
 	cmp	x2, x3
 	b.lo	pie_fix_loop
 pie_fixup_done:
+	/* O1S_DBG band 0 */
+	ldr	x20, =0x19f00030
+	ldr	w21, =0x1281
+	str	w21, [x20]
+	ldr	x20, =(0xfa000000 + 150 * 1080 * 4)
+	ldr	x21, =(1080 * 100)
+	mov	w22, #-1
+98:	str	w22, [x20], #4
+	subs	x21, x21, #1
+	b.ne	98b
 #endif
 
 #if defined(CONFIG_ARMV8_SPL_EXCEPTION_VECTORS) || !defined(CONFIG_XPL_BUILD)
