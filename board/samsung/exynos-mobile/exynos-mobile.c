@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <dm/ofnode.h>
 #include <efi.h>
+#include <fdt_support.h>
 #include <efi_loader.h>
 #include <env.h>
 #include <errno.h>
@@ -518,10 +519,24 @@ int timer_init(void)
  * at 0x9fec00000) that is only described in the previous bootloader's
  * reserved-memory, which LMB/EFI do not honour yet; allocating there hangs.
  */
+/* Full DRAM layout from the previous bootloader, handed to the OS. */
+static u64 o1s_bank_start[CONFIG_NR_DRAM_BANKS] __section(".data");
+static u64 o1s_bank_size[CONFIG_NR_DRAM_BANKS] __section(".data");
+static int o1s_nbanks __section(".data");
+
 static void exynos_keep_own_bank(void)
 {
 	ulong self = (ulong)exynos_keep_own_bank;
 	int i;
+
+	o1s_nbanks = 0;
+	for (i = 1; i <= CONFIG_NR_DRAM_BANKS; i++) {
+		if (!mem_map[i].size)
+			continue;
+		o1s_bank_start[o1s_nbanks] = mem_map[i].phys;
+		o1s_bank_size[o1s_nbanks] = mem_map[i].size;
+		o1s_nbanks++;
+	}
 
 	for (i = 1; i <= CONFIG_NR_DRAM_BANKS; i++) {
 		if (mem_map[i].size && self >= mem_map[i].phys &&
@@ -540,6 +555,92 @@ static void exynos_keep_own_bank(void)
 	mem_map[2].virt = EXYNOS2100_FB_BASE;
 	mem_map[2].size = EXYNOS2100_FB_SIZE;
 	mem_map[2].attrs = PTE_BLOCK_MEMTYPE(MT_NORMAL) | PTE_BLOCK_INNER_SHARE;
+}
+
+/*
+ * Copy every fixed reserved region of the previous bootloader's device tree
+ * (hypervisor, secure world, modem, audio, logs ...) into the OS device tree
+ * as no-map, plus its /memreserve/ entries. Returns the number copied, or a
+ * negative value if that tree is no longer usable.
+ */
+static int o1s_copy_reserved(void *blob)
+{
+	const void *prev = exynos_prev_bl_fdt();
+	int prsv, dst, node, n = 0, i;
+	u64 addr, size;
+
+	if (!prev || fdt_check_header(prev))
+		return -ENOENT;
+
+	for (i = 0; i < fdt_num_mem_rsv(prev); i++) {
+		if (!fdt_get_mem_rsv(prev, i, &addr, &size) && size) {
+			fdt_add_mem_rsv(blob, addr, size);
+			n++;
+		}
+	}
+
+	prsv = fdt_path_offset(prev, "/reserved-memory");
+	if (prsv < 0)
+		return n;
+
+	dst = fdt_path_offset(blob, "/reserved-memory");
+	if (dst < 0) {
+		dst = fdt_add_subnode(blob, 0, "reserved-memory");
+		if (dst < 0)
+			return dst;
+		fdt_setprop_u32(blob, dst, "#address-cells", 2);
+		fdt_setprop_u32(blob, dst, "#size-cells", 2);
+		fdt_setprop(blob, dst, "ranges", NULL, 0);
+	}
+
+	fdt_for_each_subnode(node, prev, prsv) {
+		int na = fdt_address_cells(prev, prsv);
+		int ns = fdt_size_cells(prev, prsv);
+
+		for (i = 0; ; i++) {
+			char name[40];
+			fdt64_t reg[2];
+			int sub;
+
+			addr = fdtdec_get_addr_size_fixed(prev, node, "reg", i,
+							  na, ns, &size, false);
+			if (addr == FDT_ADDR_T_NONE)
+				break;
+			if (!size)
+				continue;
+			snprintf(name, sizeof(name), "sboot@%llx", (unsigned long long)addr);
+			if (fdt_subnode_offset(blob, dst, name) >= 0)
+				continue;
+			sub = fdt_add_subnode(blob, dst, name);
+			if (sub < 0)
+				return sub;
+			reg[0] = cpu_to_fdt64(addr);
+			reg[1] = cpu_to_fdt64(size);
+			fdt_setprop(blob, sub, "reg", reg, sizeof(reg));
+			fdt_setprop(blob, sub, "no-map", NULL, 0);
+			n++;
+		}
+	}
+	return n;
+}
+
+int ft_board_setup(void *blob, struct bd_info *bd)
+{
+	int n;
+
+	if (o1s_nbanks < 2)
+		return 0;
+
+	/* Only expose the other banks if their reservations came along. */
+	n = o1s_copy_reserved(blob);
+	if (n <= 0) {
+		log_warning("o1s: firmware reservations unavailable (%d), OS keeps one bank\n", n);
+		return 0;
+	}
+	fdt_fixup_memory_banks(blob, o1s_bank_start, o1s_bank_size, o1s_nbanks);
+	log_info("o1s: %d DRAM banks, %d firmware reservations passed to the OS\n",
+		 o1s_nbanks, n);
+	return 0;
 }
 
 int board_early_init_f(void)
